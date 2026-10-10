@@ -1,0 +1,16 @@
+{
+  "name": "filitech-erp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Filitech ERP V2 — multi-nicho, contabilidade online, ERP doméstico",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @filitech/database generate",
+    "db:migrate": "pnpm --filter @filitech/database migrate:dev",
+    "db:seed": "pnpm --filter @filitech/database seed"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": ">=20" }
+}

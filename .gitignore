@@ -1,0 +1,13 @@
+node_modules
+.turbo
+dist
+.next
+out
+.env
+.env.local
+*.log
+.DS_Store
+coverage
+packages/database/src/generated
+*.pem
+keys/
