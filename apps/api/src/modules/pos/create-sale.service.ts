@@ -1,4 +1,5 @@
 import { prismaUnscoped, Prisma } from "@filitech/database";
+import { selectFefoBatches } from "../inventory/fefo.service";
 
 export async function createPosSale(params: {
   tenantId: string;
@@ -38,14 +39,44 @@ export async function createPosSale(params: {
       const product = await tx.product.findFirstOrThrow({
         where: { id: line.productId, tenantId: params.tenantId, active: true },
       });
+
+      if (product.isControlledSubstance && !params.clientId) {
+        throw new Error("CONTROLLED_REQUIRES_CLIENT");
+      }
+
       const qty = new Prisma.Decimal(line.quantity);
       if (product.stockQuantity.lessThan(qty)) {
         throw new Error(`INSUFFICIENT_STOCK:${product.sku}`);
       }
+
+      // FEFO quando trackingType BATCH
+      if (product.trackingType === "BATCH") {
+        const batches = await tx.productBatch.findMany({
+          where: { productId: product.id, tenantId: params.tenantId },
+        });
+        const picks = selectFefoBatches(
+          batches.map((b) => ({
+            id: b.id,
+            productId: b.productId,
+            quantity: Number(b.quantity),
+            expiresAt: b.expiresAt,
+            blocked: b.blocked,
+          })),
+          Number(qty),
+        );
+        for (const pick of picks) {
+          await tx.productBatch.update({
+            where: { id: pick.batchId },
+            data: { quantity: { decrement: pick.take } },
+          });
+        }
+      }
+
       await tx.product.update({
         where: { id: product.id },
         data: { stockQuantity: { decrement: qty } },
       });
+
       const unitPrice = new Prisma.Decimal(line.unitPrice ?? Number(product.unitPrice));
       lineResults.push({
         productId: product.id,
@@ -102,7 +133,6 @@ export async function createPosSale(params: {
       });
     }
 
-    // Loyalty EARN na mesma TX (Cap. 4.1.1)
     if (params.clientId) {
       const program = await tx.loyaltyProgram.findUnique({
         where: { tenantId: params.tenantId },
