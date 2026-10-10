@@ -1,16 +1,15 @@
 # Filitech ERP — kriptomad/ERP AUTO
 
-## Phase 3.0
-- Schema FULL: ProductBatch, Recipe, ProductionBatch, ContainerLedger, Prescription, PersonalDebt/Budget/Bill, OpenFinance, NetWorth, AccountingTask, Sale.offlineId
-- Offline POS sync idempotent
-- Loyalty redeem lock otimista
-- WhatsApp service on WO approval path
-- Bakery RECIPE_BOM routes + produce with losses
-- Liquor LIQUOR_LEDGER move + replacement charge
-- All prior: auth 2FA billing dunning fiscal platform personal accounting landing
+## Phase 3.2
+- PDV UI + offline localStorage queue + sync
+- Service Worker shell
+- ECD/ECF skeleton generators + accounting task generate route
+- Schema full niche models, FEFO POS, pharmacy, bakery, liquor, loyalty redeem
+- 3 products, auth 2FA, billing, platform, landing
 
-## Next auto
-- Pharmacy prescription route + FEFO in create-sale
-- ECD/ECF skeleton generators
-- App PDV UI page
-- Service worker offline queue
+## Still open (auto)
+- Official layout versioning table for ECD
+- Full admin UI forms
+- Focus NFe payload builder from Sale
+- Pluggy webhook handler persist
+- Multi-filial consolidate dashboard

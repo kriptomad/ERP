@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ServiceWorkerRegister } from "./_components/sw-register";
 
 export const metadata: Metadata = {
   title: "Filitech ERP — Gestão completa. Em qualquer nicho. Sem fricção.",
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className="bg-canvas text-zinc-100 antialiased">{children}</body>
+      <body className="bg-canvas text-zinc-100 antialiased">
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   );
 }

@@ -2,6 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireSession, type AuthedRequest } from "../middlewares/session.middleware";
 import { prismaUnscoped } from "@filitech/database";
+import { generateMonthlyAccountingTasks } from "../modules/accounting/task-generator.service";
+import {
+  generateEcdI050Skeleton,
+  generateEcfSkeleton,
+} from "../modules/accounting/ecd-generator.service";
 
 export const accountingRouter = Router();
 
@@ -74,4 +79,67 @@ accountingRouter.get("/marketplace", requireSession, async (_req, res) => {
     orderBy: { marketplaceRatingAverage: "desc" },
   });
   res.json({ success: true, data: firms });
+});
+
+accountingRouter.post("/engagements/:id/generate-tasks", requireSession, async (req: AuthedRequest, res) => {
+  const p = z.object({ competence: z.string().regex(/^\d{4}-\d{2}$/) }).safeParse(req.body);
+  if (!p.success) {
+    res.status(400).json({ success: false, error: p.error.flatten() });
+    return;
+  }
+  try {
+    const tasks = await generateMonthlyAccountingTasks({
+      engagementId: req.params.id,
+      competence: p.data.competence,
+    });
+    res.status(201).json({ success: true, data: tasks });
+  } catch (e) {
+    res.status(400).json({
+      success: false,
+      error: { code: e instanceof Error ? e.message : "FAIL" },
+    });
+  }
+});
+
+accountingRouter.post("/generate/ecd", requireSession, async (req: AuthedRequest, res) => {
+  const p = z
+    .object({
+      cnpj: z.string().min(11),
+      periodStart: z.string(),
+      periodEnd: z.string(),
+      lines: z.array(
+        z.object({
+          date: z.string(),
+          accountCode: z.string(),
+          description: z.string(),
+          debit: z.number(),
+          credit: z.number(),
+        }),
+      ),
+    })
+    .safeParse(req.body);
+  if (!p.success) {
+    res.status(400).json({ success: false, error: p.error.flatten() });
+    return;
+  }
+  const content = generateEcdI050Skeleton(p.data);
+  res.json({ success: true, data: { content, format: "SPED_ECD_SKELETON" } });
+});
+
+accountingRouter.post("/generate/ecf", requireSession, async (req: AuthedRequest, res) => {
+  const p = z
+    .object({
+      cnpj: z.string().min(11),
+      year: z.number().int(),
+      lucroLiquido: z.number(),
+    })
+    .safeParse(req.body);
+  if (!p.success) {
+    res.status(400).json({ success: false, error: p.error.flatten() });
+    return;
+  }
+  res.json({
+    success: true,
+    data: { content: generateEcfSkeleton(p.data), format: "SPED_ECF_SKELETON" },
+  });
 });
