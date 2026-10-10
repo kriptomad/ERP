@@ -1,35 +1,45 @@
 # Filitech ERP — Progresso (kriptomad/ERP)
 
-Fonte: BIBLE_ENGINEERING_V2 + mega-prompt · Zero skip
+Automação contínua sem confirmação do usuário. Fonte: BIBLE + mega-prompt.
 
-## Feito (phase 1.4)
+## Phase 2.0
 
-- [x] Monorepo + docker-compose
-- [x] Schema: 3 TenantType, billing, RBAC, 2FA, Loyalty, Personal, Accounting, PlatformAdmin
-- [x] Isolamento multi-tenant ALS + extension
+### Infra / backbone
+- [x] Monorepo, docker-compose, isolation multi-tenant
+- [x] Schema core 3 TenantType + Loyalty + Personal + Accounting + PlatformAdmin
 - [x] Seed planos/módulos
-- [x] Onboard BUSINESS / PERSONAL / ACCOUNTING_OFFICE + LGPD
-- [x] Login + session 402 + feature gating
+
+### Auth / billing
+- [x] Onboard 3 tipos + LGPD
 - [x] 2FA TOTP + backup codes
-- [x] Dunning + cancel Art.49 + webhooks Asaas/Stripe
-- [x] Tokenização services Asaas/Stripe
-- [x] PDV sale + estoque + crediário + loyalty TX
+- [x] Dunning + Art.49 + webhooks
+- [x] Asaas/Stripe tokenize services
+
+### Operacional B2B
+- [x] PDV sale + crediário + loyalty TX
 - [x] Gaveta cega
-- [x] WorkOrder + token 72h + requireModule WORK_ORDER
-- [x] FEFO helper
-- [x] Platform admin (tenants, planos, módulos, AuditLog)
-- [x] Accounting engagement + marketplace list
-- [x] Personal accounts/transactions
-- [x] Landing 3 produtos + nichos + calculadora + login/cadastro
+- [x] WorkOrder + token 72h + feature gate
+- [x] FEFO helper + product-batch service
+- [x] Recipe/CMV/produção (lógica)
+- [x] Cascos ledger (lógica)
+- [x] Prescription/SNGPC flags (lógica)
 
-## Próximo
+### Contábil / Pessoal
+- [x] Engagement + marketplace
+- [x] Personal accounts/tx
+- [x] Debt Avalanche/Snowball
+- [x] Carnê-Leão sugestivo
+- [x] Pluggy connect token
 
-- [ ] ProductBatch no schema + FEFO no POS
-- [ ] Recipe/ProductionBatch (padaria)
-- [ ] ReturnableContainerLedger (adega)
-- [ ] PrescriptionRecord + SNGPC
-- [ ] Pluggy Open Finance
-- [ ] Focus NFe
-- [ ] Painel admin frontend
+### Landing
+- [x] 3 produtos + nichos + calculadora + login/cadastro 3 modos
+
+### Ainda na fila (continua automático)
+- [ ] Models ProductBatch/Recipe/Ledger no schema.prisma + migrate
+- [ ] Focus NFe emit + eventos fiscais
+- [ ] WhatsApp Cloud API templates
 - [ ] PDV offline-first
+- [ ] Painel admin UI
+- [ ] ECD/ECF generators
 - [ ] 12 nichos expandidos
+- [ ] BullMQ workers reais
