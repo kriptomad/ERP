@@ -18,6 +18,8 @@ import { jobsRouter } from "./routes/jobs.routes";
 import { bakeryRouter } from "./routes/bakery.routes";
 import { liquorRouter } from "./routes/liquor.routes";
 import { pharmacyRouter } from "./routes/pharmacy.routes";
+import { multiFilialRouter } from "./routes/multi-filial.routes";
+import { pluggyWebhooksRouter } from "./routes/webhooks.pluggy.routes";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -32,7 +34,22 @@ app.get("/health", (_req, res) => {
     products: ["BUSINESS", "PERSONAL", "ACCOUNTING_OFFICE"],
     megaPrompt: true,
     repo: "kriptomad/ERP",
-    phase: "3.1",
+    phase: "3.4",
+  });
+});
+
+app.get("/status", (_req, res) => {
+  res.json({
+    api: "operational",
+    phase: "3.4",
+    components: {
+      auth: "up",
+      billing: "up",
+      pos: "up",
+      fiscal: "up",
+      personal: "up",
+      accounting: "up",
+    },
   });
 });
 
@@ -47,6 +64,7 @@ app.use("/api/v1/personal", personalRouter);
 app.use("/api/v1/personal", personalAdvancedRouter);
 app.use("/api/v1/work-orders", workOrderRouter);
 app.use("/api/v1/webhooks/billing", billingWebhooksRouter);
+app.use("/api/v1/webhooks/pluggy", pluggyWebhooksRouter);
 app.use("/api/v1/clients", clientsRouter);
 app.use("/api/v1/products", productsRouter);
 app.use("/api/v1/fiscal", fiscalRouter);
@@ -54,7 +72,8 @@ app.use("/api/v1/jobs", jobsRouter);
 app.use("/api/v1/bakery", bakeryRouter);
 app.use("/api/v1/liquor", liquorRouter);
 app.use("/api/v1/pharmacy", pharmacyRouter);
+app.use("/api/v1/multi-filial", multiFilialRouter);
 
 app.listen(PORT, () => {
-  console.log(`[filitech-api] phase-3.1 on :${PORT}`);
+  console.log(`[filitech-api] phase-3.4 on :${PORT}`);
 });
