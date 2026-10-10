@@ -64,18 +64,29 @@ model Tenant {
   clients               Client[]
   suppliers             Supplier[]
   products              Product[]
+  productBatches        ProductBatch[]
   sales                 Sale[]
   cashRegisters         CashRegister[]
   workOrders            WorkOrder[]
   stockMovements        StockMovement[]
+  recipes               Recipe[]
+  productionBatches     ProductionBatch[]
+  containerLedgers      ReturnableContainerLedger[]
+  prescriptions         PrescriptionRecord[]
   loyaltyProgram        LoyaltyProgram?
   loyaltyAccounts       LoyaltyAccount[]
   personalAccounts      PersonalAccount[]
   personalCategories    PersonalCategory[]
   personalTransactions  PersonalTransaction[]
+  personalDebts         PersonalDebt[]
+  personalBudgets       PersonalBudget[]
+  personalBills         PersonalBill[]
+  openFinanceConsents   OpenFinanceConsent[]
+  netWorthSnapshots     NetWorthSnapshot[]
   accountingFirmProfile AccountingFirmProfile?
   engagementsAsFirm     AccountingEngagement[] @relation("EngagementsAsFirm")
   engagementsAsClient   AccountingEngagement[] @relation("EngagementsAsClient")
+  accountingTasks       AccountingTask[]
 
   @@index([status])
   @@index([parentTenantId])
@@ -97,12 +108,12 @@ model Plan {
 }
 
 model Module {
-  id           String  @id @default(uuid())
-  code         String  @unique
-  label        String
-  monthlyPrice Decimal @db.Decimal(10, 2)
-  description  String
-  active       Boolean @default(true)
+  id            String         @id @default(uuid())
+  code          String         @unique
+  label         String
+  monthlyPrice  Decimal        @db.Decimal(10, 2)
+  description   String
+  active        Boolean        @default(true)
   tenantModules TenantModule[]
   @@map("modules")
 }
@@ -164,10 +175,10 @@ model BillingEvent {
 }
 
 model ReferralCode {
-  id        String   @id @default(uuid())
-  tenantId  String   @unique
-  code      String   @unique
-  createdAt DateTime @default(now())
+  id        String     @id @default(uuid())
+  tenantId  String     @unique
+  code      String     @unique
+  createdAt DateTime   @default(now())
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   referrals Referral[]
   @@map("referral_codes")
@@ -188,21 +199,21 @@ model Referral {
 }
 
 model User {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   tenantId            String
   name                String
   email               String
   passwordHash        String
   role                UserRole
-  active              Boolean  @default(true)
-  preferredThemeMode  String   @default("light")
+  active              Boolean   @default(true)
+  preferredThemeMode  String    @default("light")
   totpSecretEncrypted String?
   totpConfirmedAt     DateTime?
   managerPinHash      String?
-  invitePending       Boolean  @default(false)
+  invitePending       Boolean   @default(false)
   inviteToken         String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   rolePermissions RolePermission[]
   cashRegisters   CashRegister[]
@@ -311,10 +322,12 @@ model Client {
   whatsappOptOutAt  DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sales          Sale[]
-  workOrders     WorkOrder[]
-  loyaltyAccount LoyaltyAccount?
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sales            Sale[]
+  workOrders       WorkOrder[]
+  loyaltyAccount   LoyaltyAccount?
+  containerLedgers ReturnableContainerLedger[]
+  prescriptions    PrescriptionRecord[]
   @@unique([tenantId, document])
   @@index([tenantId, name])
   @@map("clients")
@@ -361,15 +374,104 @@ model Product {
   active                        Boolean             @default(true)
   createdAt                     DateTime            @default(now())
   updatedAt                     DateTime            @updatedAt
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
-  saleItems      SaleItem[]
-  stockMovements StockMovement[]
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier         Supplier?                    @relation(fields: [supplierId], references: [id])
+  saleItems        SaleItem[]
+  stockMovements   StockMovement[]
+  batches          ProductBatch[]
+  recipeItems      RecipeItem[]
+  containerLedgers ReturnableContainerLedger[]
+  prescriptions    PrescriptionRecord[]
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
   @@index([tenantId, category])
   @@index([tenantId, active])
   @@map("products")
+}
+
+model ProductBatch {
+  id        String   @id @default(uuid())
+  tenantId  String
+  productId String
+  batchCode String
+  quantity  Decimal  @db.Decimal(12, 3)
+  expiresAt DateTime
+  blocked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, productId, batchCode])
+  @@index([productId, expiresAt])
+  @@map("product_batches")
+}
+
+model Recipe {
+  id            String       @id @default(uuid())
+  tenantId      String
+  name          String
+  yieldQuantity Decimal      @db.Decimal(12, 3)
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  RecipeItem[]
+  @@index([tenantId])
+  @@map("recipes")
+}
+
+model RecipeItem {
+  id        String  @id @default(uuid())
+  recipeId  String
+  productId String
+  quantity  Decimal @db.Decimal(12, 3)
+  recipe  Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  @@map("recipe_items")
+}
+
+model ProductionBatch {
+  id               String   @id @default(uuid())
+  tenantId         String
+  recipeId         String
+  quantityProduced Decimal  @db.Decimal(12, 3)
+  lossQuantity     Decimal  @default(0) @db.Decimal(12, 3)
+  unitCost         Decimal  @db.Decimal(12, 4)
+  producedAt       DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, producedAt])
+  @@map("production_batches")
+}
+
+model ReturnableContainerLedger {
+  id               String   @id @default(uuid())
+  tenantId         String
+  clientId         String
+  productId        String
+  quantityHeld     Decimal  @db.Decimal(12, 3)
+  depositUnitValue Decimal  @db.Decimal(12, 2)
+  updatedAt        DateTime @updatedAt
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  @@unique([tenantId, clientId, productId])
+  @@map("returnable_container_ledgers")
+}
+
+model PrescriptionRecord {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  clientId           String
+  productId          String
+  prescriptionNumber String
+  prescribedAt       DateTime
+  retainedAt         DateTime @default(now())
+  listCode           String?
+  sngpcStatus        String   @default("PENDING_TRANSMISSION")
+  saleId             String?
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client  Client  @relation(fields: [clientId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  @@index([tenantId, clientId])
+  @@map("prescription_records")
 }
 
 model Sale {
@@ -382,6 +484,7 @@ model Sale {
   paymentMethod  String
   channel        String   @default("POS")
   status         String   @default("COMPLETED")
+  offlineId      String?
   createdAt      DateTime @default(now())
   tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client       Client?              @relation(fields: [clientId], references: [id])
@@ -389,6 +492,7 @@ model Sale {
   cashRegister CashRegister?        @relation(fields: [cashRegisterId], references: [id])
   items        SaleItem[]
   loyaltyTx    LoyaltyTransaction[]
+  @@unique([tenantId, offlineId])
   @@index([tenantId, createdAt])
   @@map("sales")
 }
@@ -552,6 +656,68 @@ model PersonalTransaction {
   @@map("personal_transactions")
 }
 
+model PersonalDebt {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  name                String
+  remainingAmount     Decimal  @db.Decimal(14, 2)
+  interestRateMonthly Decimal  @db.Decimal(6, 4)
+  minimumInstallment  Decimal  @db.Decimal(14, 2)
+  status              String   @default("ACTIVE")
+  createdAt           DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("personal_debts")
+}
+
+model PersonalBudget {
+  id             String   @id @default(uuid())
+  tenantId       String
+  categoryId     String
+  monthReference DateTime
+  limitAmount    Decimal  @db.Decimal(14, 2)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, categoryId, monthReference])
+  @@map("personal_budgets")
+}
+
+model PersonalBill {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  name               String
+  amount             Decimal  @db.Decimal(14, 2)
+  dueDay             Int
+  reminderDaysBefore Int      @default(3)
+  status             String   @default("PENDING")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, status])
+  @@map("personal_bills")
+}
+
+model OpenFinanceConsent {
+  id           String    @id @default(uuid())
+  tenantId     String
+  itemId       String    @unique
+  status       String    @default("UPDATED")
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  @@map("open_finance_consents")
+}
+
+model NetWorthSnapshot {
+  id               String   @id @default(uuid())
+  tenantId         String
+  snapshotDate     DateTime
+  totalAssets      Decimal  @db.Decimal(14, 2)
+  totalLiabilities Decimal  @db.Decimal(14, 2)
+  netWorth         Decimal  @db.Decimal(14, 2)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, snapshotDate])
+  @@map("net_worth_snapshots")
+}
+
 model AccountingFirmProfile {
   id                       String   @id @default(uuid())
   tenantId                 String   @unique
@@ -578,9 +744,26 @@ model AccountingEngagement {
   revokedByUserId        String?
   revokedReason          String?
   createdAt              DateTime                   @default(now())
-  accountingFirmTenant Tenant @relation("EngagementsAsFirm", fields: [accountingFirmTenantId], references: [id])
-  clientTenant         Tenant @relation("EngagementsAsClient", fields: [clientTenantId], references: [id])
+  accountingFirmTenant Tenant           @relation("EngagementsAsFirm", fields: [accountingFirmTenantId], references: [id])
+  clientTenant         Tenant           @relation("EngagementsAsClient", fields: [clientTenantId], references: [id])
+  tasks                AccountingTask[]
   @@index([accountingFirmTenantId, status])
   @@index([clientTenantId, status])
   @@map("accounting_engagements")
+}
+
+model AccountingTask {
+  id           String    @id @default(uuid())
+  tenantId     String
+  engagementId String?
+  code         String
+  competence   String
+  status       String    @default("PENDING")
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  engagement AccountingEngagement? @relation(fields: [engagementId], references: [id])
+  @@index([tenantId, status])
+  @@map("accounting_tasks")
 }
