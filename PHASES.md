@@ -1,15 +1,16 @@
-# Filitech ERP — kriptomad/ERP (auto-run)
+# Filitech ERP — kriptomad/ERP AUTO
 
-## Phase 2.2 DONE
-- ProductBatch/Recipe/Cascos/Prescription/PersonalDebt models (partial file)
-- Jobs: loyalty expire, suspend overdue, cancel at period end
-- TaxEngine Simples Anexo I + Focus NFe routes (gated FISCAL_NFCE)
-- Clients/products CRUD, tenantType gate, all prior phases
+## Phase 3.0
+- Schema FULL: ProductBatch, Recipe, ProductionBatch, ContainerLedger, Prescription, PersonalDebt/Budget/Bill, OpenFinance, NetWorth, AccountingTask, Sale.offlineId
+- Offline POS sync idempotent
+- Loyalty redeem lock otimista
+- WhatsApp service on WO approval path
+- Bakery RECIPE_BOM routes + produce with losses
+- Liquor LIQUOR_LEDGER move + replacement charge
+- All prior: auth 2FA billing dunning fiscal platform personal accounting landing
 
-## Continues next
-- Merge models into schema.prisma + first migration SQL
-- Admin UI pages
-- Offline PDV service worker
-- WhatsApp on O.S. approval send
-- ECD/ECF generators
-- Expanded niches catalog
+## Next auto
+- Pharmacy prescription route + FEFO in create-sale
+- ECD/ECF skeleton generators
+- App PDV UI page
+- Service worker offline queue
