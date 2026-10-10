@@ -11,6 +11,8 @@ import { personalRouter } from "./routes/personal.routes";
 import { workOrderRouter } from "./routes/work-order.routes";
 import { billingWebhooksRouter } from "./routes/webhooks.billing.routes";
 import { personalAdvancedRouter } from "./routes/personal-advanced.routes";
+import { clientsRouter } from "./routes/clients.routes";
+import { productsRouter } from "./routes/products.routes";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -25,7 +27,7 @@ app.get("/health", (_req, res) => {
     products: ["BUSINESS", "PERSONAL", "ACCOUNTING_OFFICE"],
     megaPrompt: true,
     repo: "kriptomad/ERP",
-    phase: "2.0",
+    phase: "2.1",
   });
 });
 
@@ -40,7 +42,9 @@ app.use("/api/v1/personal", personalRouter);
 app.use("/api/v1/personal", personalAdvancedRouter);
 app.use("/api/v1/work-orders", workOrderRouter);
 app.use("/api/v1/webhooks/billing", billingWebhooksRouter);
+app.use("/api/v1/clients", clientsRouter);
+app.use("/api/v1/products", productsRouter);
 
 app.listen(PORT, () => {
-  console.log(`[filitech-api] kriptomad/ERP phase-2.0 on :${PORT}`);
+  console.log(`[filitech-api] kriptomad/ERP phase-2.1 on :${PORT}`);
 });
