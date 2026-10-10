@@ -146,6 +146,8 @@ export const NICHES = [
   },
 ] as const;
 
+export { EXPANDED_NICHES } from "./niches-expanded";
+
 export const NICHE_COMBOS = [
   { code: "COMBO_MARKET", label: "Combo Mercado Pro", discountPercent: 12, modules: ["FISCAL_NFCE", "WHATSAPP_INTEGRATION"] },
   { code: "COMBO_TECH", label: "Combo Assistência Técnica Pro", discountPercent: 15, modules: ["WORK_ORDER", "WHATSAPP_INTEGRATION", "FISCAL_NFCE"] },
