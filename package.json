@@ -1,0 +1,27 @@
+{
+  "name": "filitech-erp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Filitech ERP — SaaS Multi-Nicho Completo (PDV, Estoque, Financeiro, Fiscal, CRM)",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm --workspace apps/api run build && npm --workspace apps/web run build",
+    "db:generate": "npm --workspace apps/api run db:generate",
+    "db:migrate": "npm --workspace apps/api run db:migrate",
+    "db:studio": "npm --workspace apps/api run db:studio",
+    "lint": "npm --workspace apps/api run lint",
+    "test": "npm --workspace apps/api run test"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
