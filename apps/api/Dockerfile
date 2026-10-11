@@ -22,14 +22,14 @@ RUN npm ci
 COPY tsconfig.base.json ./
 COPY apps/api ./apps/api
 
+# Prisma client GERADO ANTES do tsc (tipos/enums de @prisma/client são necessários na compilação)
+RUN npm --workspace apps/api exec prisma generate
+
 RUN npm --workspace apps/api run build
 
 # Sanity check: o bundle DEVE importar express (falha o build se não)
 RUN grep -q 'require("express")' apps/api/dist/main.js || \
     (echo "FATAL: express não encontrado no bundle compilado" && exit 1)
-
-# Prisma client GERADO no builder (usa o schema e o engines do lockfile)
-RUN npm --workspace apps/api exec prisma generate
 
 # ----------------------------------------------------------------------------
 # Runtime
