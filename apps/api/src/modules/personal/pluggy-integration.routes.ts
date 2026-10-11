@@ -5,6 +5,7 @@ import { authenticate } from '../../middlewares/auth.middleware';
 import { requirePersonalTenant } from '../../middlewares/tenant-type-gatekeeper.middleware';
 import { getRequestContext } from '../../middlewares/request-context.middleware';
 import { getPluggyConnectToken, handlePluggyWebhook } from './pluggy-integration.service';
+import { logger } from '../../logging/structured-logger';
 
 export const pluggyIntegrationRouter = Router();
 
@@ -39,7 +40,7 @@ pluggyIntegrationRouter.get('/accounts', async (req, res, next) => {
     const accounts = await prisma.personalAccount.findMany({
       where: { tenantId: tenantId!, active: true },
       include: {
-        category: true,
+        defaultCategory: true,
         _count: { select: { transactions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -88,7 +89,7 @@ pluggyIntegrationRouter.post('/sync-transactions', async (req, res, next) => {
     fromDate.setDate(fromDate.getDate() - 90);
 
     const accounts = await prisma.personalAccount.findMany({
-      where: { tenantId: tenantId!, active: true, hasPluggyConnection: true },
+      where: { tenantId: tenantId!, active: true, pluggyItemId: { not: null } },
     });
 
     let totalSynced = 0;
@@ -112,6 +113,7 @@ pluggyIntegrationRouter.post('/sync-transactions', async (req, res, next) => {
               tenantId: tenantId!,
               accountId: account.id,
               categoryId: account.defaultCategoryId,
+              createdBy: account.ownerId,
               type,
               amount: Math.abs(tx.amount),
               description: tx.description || 'Transação importada',

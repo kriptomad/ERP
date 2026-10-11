@@ -26,7 +26,7 @@ personalDebtRouter.get('/', async (req, res, next) => {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.personalDebt.count({ where }),
-    });
+    ]);
 
     res.json({ success: true, data: { items: debts, total }, error: null });
   } catch (err) {

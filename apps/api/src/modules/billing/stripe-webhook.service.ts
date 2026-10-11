@@ -57,7 +57,7 @@ interface StripeWebhookPayload {
 }
 
 export async function handleStripeWebhook(eventType: string, payload: any): Promise<void> {
-  const { id: transactionId, status, amount, currency, customer, subscription } = payload.data?.object || {};
+  const { id: transactionId, status, amount, currency, customer, subscription, name } = payload.data?.object || {};
 
   logger.info('Stripe webhook received', { eventType, transactionId, status, amount, currency });
 
@@ -66,10 +66,10 @@ export async function handleStripeWebhook(eventType: string, payload: any): Prom
       await prisma.subscription.upsert({
         where: { externalSubscriptionId: subscription || '' },
         create: {
-          externalSubscriptionId: subscription || '';
-          tenantId: customer ? `tenant-${customer}` : 'demo-store';
-          status: 'ACTIVE';
-          provider: 'STRIPE';
+          externalSubscriptionId: subscription || '',
+          tenantId: customer ? `tenant-${customer}` : 'demo-store',
+          status: 'ACTIVE',
+          provider: 'STRIPE',
         },
         update: { status },
       });
@@ -79,10 +79,10 @@ export async function handleStripeWebhook(eventType: string, payload: any): Prom
       await prisma.subscription.upsert({
         where: { externalSubscriptionId: subscription || '' },
         create: {
-          externalSubscriptionId: subscription || '';
-          tenantId: customer ? `tenant-${customer}` : 'demo-store';
-          status: 'PAST_DUE';
-          provider: 'STRIPE';
+          externalSubscriptionId: subscription || '',
+          tenantId: customer ? `tenant-${customer}` : 'demo-store',
+          status: 'PAST_DUE',
+          provider: 'STRIPE',
         },
         update: { status },
       });
@@ -93,8 +93,15 @@ export async function handleStripeWebhook(eventType: string, payload: any): Prom
       const custId = customer || '';
       await prisma.tenant.upsert({
         where: { externalCustomerId: custId },
-        create: { externalCustomerId: custId, tenantType: 'BUSINESS', status: 'ACTIVE' },
-        update: { legalName: payload.data.object.name || legalName },
+        create: {
+          slug: `stripe-${custId}`,
+          externalCustomerId: custId,
+          legalName: name || 'Sem nome',
+          tradeName: name || 'Sem nome',
+          tenantType: 'BUSINESS',
+          status: 'ACTIVE',
+        },
+        update: { legalName: name || undefined, tradeName: name || undefined },
       });
       break;
     }

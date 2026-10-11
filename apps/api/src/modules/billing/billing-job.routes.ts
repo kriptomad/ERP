@@ -1,5 +1,17 @@
+import { Router } from 'express';
 import { prisma } from '../../infra/prisma';
 import { logger } from '../../logging/structured-logger';
+
+export const billingJobRouter = Router();
+
+billingJobRouter.post('/dunning', async (_req, res) => {
+  try {
+    await processDunningCycle();
+    res.json({ success: true, data: { processed: true }, error: null });
+  } catch (err) {
+    res.status(500).json({ success: false, data: null, error: { code: 'DUNNING_FAILED', message: (err as Error).message } });
+  }
+});
 
 export async function processDunningCycle(): Promise<void> {
   const pastDueTenants = await prisma.tenant.findMany({

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../infra/prisma';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/auth.middleware';
@@ -46,8 +47,8 @@ systemParameterRouter.post('/', async (req, res, next) => {
     const data = upsertSchema.parse(req.body);
     const param = await prisma.systemParameter.upsert({
       where: { key: data.key },
-      create: data,
-      update: { value: data.value, description: data.description },
+      create: { key: data.key, value: data.value as Prisma.InputJsonValue, description: data.description },
+      update: { value: data.value as Prisma.InputJsonValue, description: data.description },
     });
     res.status(201).json({ success: true, data: param, error: null });
   } catch (err) {
@@ -60,7 +61,7 @@ systemParameterRouter.put('/:key', async (req, res, next) => {
     const { value, description } = z.object({ value: z.record(z.unknown()), description: z.string().optional() }).parse(req.body);
     const param = await prisma.systemParameter.update({
       where: { key: req.params.key },
-      data: { value, description },
+      data: { value: value as Prisma.InputJsonValue, description },
     });
     res.json({ success: true, data: param, error: null });
   } catch (err) {

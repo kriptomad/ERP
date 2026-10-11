@@ -100,6 +100,7 @@ enum StockMovementType {
   RETURN
   PRODUCTION
   TRANSFER
+  LOSS
 }
 
 enum AdjustmentSubtype {
@@ -165,10 +166,13 @@ enum FiscalDocumentStatus {
 }
 
 enum FiscalEventType {
+  AUTHORIZATION
   CANCELLATION
   CC_E
   MANIFESTATION
   CORRECTION_LETTER
+  DENIAL
+  OTHER
 }
 
 enum NotificationChannel {
@@ -367,6 +371,7 @@ model Tenant {
   legalName         String
   tradeName         String
   cnpj              String?      @unique
+  externalCustomerId String?     @unique
   tenantType        TenantType   @default(BUSINESS)
   status            TenantStatus @default(TRIAL)
   gracePeriodEndsAt DateTime?
@@ -416,6 +421,8 @@ model Tenant {
   inventoryCountItems InventoryCountItem[]
   osPhotos          OsPhoto[]
   dataImportJobs    DataImportJob[]
+  imports           Import[]
+  importStatusHistory ImportStatusHistory[]
   referralCode      ReferralCode?
   referredAs        Referral?     @relation("ReferredTenant")
   loyaltyProgram    LoyaltyProgram?
@@ -452,6 +459,7 @@ model Tenant {
   appointments                Appointment[]
   accountingEngagements       AccountingEngagement[]   @relation("AccountingEngagementsAsClient")
   accountingTasks             AccountingTask[]         @relation("AccountingTasksRelation")
+  billingEvents               BillingEvent[]
 
   @@index([status])
   @@index([parentTenantId])
@@ -505,11 +513,12 @@ model TenantModule {
 model Subscription {
   id                     String             @id @default(uuid())
   tenantId               String
-  planId                 String
+  planId                 String?
   provider               String
   externalSubscriptionId String             @unique
   status                 SubscriptionStatus @default(TRIAL)
   pastDueSince           DateTime?
+  currentPeriodStart     DateTime?
   currentPeriodEnd       DateTime?
   paymentMethodToken     String?
   paymentMethodBrand     String?
@@ -525,7 +534,7 @@ model Subscription {
   updatedAt              DateTime           @updatedAt
 
   tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  plan                   Plan               @relation(fields: [planId], references: [id])
+  plan                   Plan?              @relation(fields: [planId], references: [id])
   billingEvents          BillingEvent[]
 
   @@index([tenantId, status])
@@ -534,14 +543,16 @@ model Subscription {
 
 model BillingEvent {
   id               String       @id @default(uuid())
-  subscriptionId   String
+  subscriptionId   String?
+  tenantId         String?
   provider         String
   externalEventKey String
   type             String
-  payload          Json
+  payload          Json?
   createdAt        DateTime     @default(now())
 
-  subscription     Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscription     Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  tenant           Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([provider, externalEventKey])
   @@index([subscriptionId, createdAt])
@@ -564,6 +575,10 @@ model User {
   totpSecretEncrypted String?
   totpConfirmedAt     DateTime?
   managerPinHash      String?
+  termsVersionAccepted String?
+  termsAcceptedAt     DateTime?
+  privacyPolicyVersionAccepted String?
+  privacyPolicyAcceptedAt DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -587,6 +602,7 @@ model User {
   inventoryCountsApproved InventoryCount[] @relation("InventoryCountApprovedBy")
   inventoryCountItemsCounted InventoryCountItem[]
   dataImportJobsCreated DataImportJob[]
+  importsCreated Import[]
   cashRegisterMovements CashRegisterMovement[]
   personalAccountsOwned PersonalAccount[] @relation("PersonalAccountOwner")
   personalTransactionsCreated PersonalTransaction[] @relation("PersonalTransactionCreatedBy")
@@ -726,6 +742,8 @@ model Supplier {
   products  Product[]
   preferredByProducts Product[] @relation("PreferredSupplier")
   purchaseOrders PurchaseOrder[]
+  imports   Import[]
+  accountsPayable AccountPayable[]
 
   @@unique([tenantId, document])
   @@map("suppliers")
@@ -782,6 +800,8 @@ model Product {
   productionBatchOutputs ProductionBatch[]  @relation("ProductionOutput")
   purchaseOrderItems    PurchaseOrderItem[]
   inventoryCountItems   InventoryCountItem[]
+  returnableLedgerEntries ReturnableContainerLedger[]
+  prescriptionRecords   PrescriptionRecord[]
 
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
@@ -875,6 +895,7 @@ model PrescriptionRecord {
   createdAt         DateTime @default(now())
 
   tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product           Product  @relation(fields: [productId], references: [id])
 
   @@unique([tenantId, saleId, productId])
   @@map("prescription_records")
@@ -1115,6 +1136,7 @@ model AccountPayable {
   id            String    @id @default(uuid())
   tenantId      String
   supplierId    String?
+  externalId    String?   @unique
   description   String
   amount        Decimal   @db.Decimal(12, 2)
   dueDate       DateTime
@@ -1125,6 +1147,7 @@ model AccountPayable {
   createdAt     DateTime  @default(now())
 
   tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
 
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
@@ -1136,6 +1159,7 @@ model AccountReceivable {
   tenantId      String
   clientId      String?
   saleId        String?
+  externalId    String?  @unique
   description   String
   amount        Decimal   @db.Decimal(12, 2)
   dueDate       DateTime
@@ -1352,6 +1376,7 @@ model ReturnableContainerLedger {
 
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  product          Product  @relation(fields: [productId], references: [id])
 
   @@index([tenantId, clientId])
   @@map("returnable_container_ledger")
@@ -1447,6 +1472,7 @@ model FiscalDocument {
   events          FiscalDocumentEvent[]
 
   @@index([tenantId, type, createdAt])
+  @@unique([tenantId, key])
   @@map("fiscal_documents")
 }
 
@@ -1662,11 +1688,15 @@ model PersonalAccount {
   balance       Decimal      @default(0) @db.Decimal(12, 2)
   creditLimit   Decimal?     @db.Decimal(12, 2)
   closingDay    Int?
+  pluggyItemId  String?
+  pluggyAccountId String?
+  defaultCategoryId String?
   active        Boolean      @default(true)
   createdAt     DateTime     @default(now())
 
   tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   owner         User         @relation("PersonalAccountOwner", fields: [ownerId], references: [id])
+  defaultCategory PersonalCategory? @relation("AccountDefaultCategory", fields: [defaultCategoryId], references: [id])
   transactions  PersonalTransaction[]
 
   @@index([tenantId, ownerId])
@@ -1685,6 +1715,9 @@ model PersonalCategory {
   createdAt DateTime @default(now())
 
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions PersonalTransaction[] @relation("TransactionCategory")
+  budgets   PersonalBudget[]          @relation("BudgetCategory")
+  defaultAccounts PersonalAccount[]   @relation("AccountDefaultCategory")
 
   @@unique([tenantId, name, type])
   @@map("personal_categories")
@@ -1709,6 +1742,7 @@ model PersonalTransaction {
   tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   account           PersonalAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   createdByUser     User             @relation("PersonalTransactionCreatedBy", fields: [createdBy], references: [id])
+  category          PersonalCategory? @relation("TransactionCategory", fields: [categoryId], references: [id])
   splits            PersonalTransactionSplit[]
 
   @@index([tenantId, accountId, transactionDate])
@@ -1741,6 +1775,7 @@ model PersonalBudget {
   createdAt     DateTime     @default(now())
 
   tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category      PersonalCategory? @relation("BudgetCategory", fields: [categoryId], references: [id])
 
   @@unique([tenantId, categoryId, month, year])
   @@map("personal_budgets")
@@ -1773,6 +1808,7 @@ model PersonalInvestment {
   averagePrice  Decimal?      @db.Decimal(12, 4)
   currentPrice  Decimal?      @db.Decimal(12, 4)
   totalValue    Decimal?      @db.Decimal(12, 2)
+  pluggyItemId  String?
   active        Boolean        @default(true)
   createdAt     DateTime       @default(now())
 
@@ -1792,6 +1828,7 @@ model PersonalDebt {
   interestRate  Decimal?  @db.Decimal(6, 4)
   monthlyPayment Decimal? @db.Decimal(12, 2)
   dueDate       DateTime?
+  pluggyItemId  String?
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
@@ -1864,10 +1901,14 @@ model AccountingFirmProfile {
   contadorName      String?
   contadorCrc       String?
   specializations   String[]
+  services          String[] @default([])
+  isListedInMarketplace Boolean @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  engagementsAsFirm AccountingEngagement[] @relation("FirmProfileEngagements")
+  reviews           AccountingMarketplaceReview[]
 
   @@map("accounting_firm_profiles")
 }
@@ -1877,8 +1918,12 @@ model AccountingEngagement {
   tenantId          String
   firmTenantId      String?
   clientTenantId    String?
+  firmProfileId     String?
   status            String   @default("ACTIVE")
-  startDate         DateTime
+  scopes            String[] @default([])
+  acceptedAt        DateTime?
+  expiresAt         DateTime?
+  startDate         DateTime @default(now())
   endDate           DateTime?
   monthlyFee        Decimal? @db.Decimal(12, 2)
   createdAt         DateTime @default(now())
@@ -1886,9 +1931,40 @@ model AccountingEngagement {
   tenant            Tenant   @relation("AccountingEngagementsAsClient", fields: [tenantId], references: [id], onDelete: Cascade)
   firm              Tenant?  @relation("EngagementsAsFirm", fields: [firmTenantId], references: [id])
   client            Tenant?  @relation("EngagementsAsClient", fields: [clientTenantId], references: [id])
+  firmProfile       AccountingFirmProfile? @relation("FirmProfileEngagements", fields: [firmProfileId], references: [id])
+  auditEvents       AccountingEngagementAuditEvent[]
 
   @@index([tenantId, status])
   @@map("accounting_engagements")
+}
+
+model AccountingEngagementAuditEvent {
+  id            String   @id @default(uuid())
+  engagementId  String
+  event         String
+  actorTenantId String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  engagement    AccountingEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId, createdAt])
+  @@map("accounting_engagement_audit_events")
+}
+
+model AccountingMarketplaceReview {
+  id             String   @id @default(uuid())
+  firmProfileId  String
+  clientTenantId String
+  engagementId   String?
+  rating         Int
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  firmProfile    AccountingFirmProfile @relation(fields: [firmProfileId], references: [id], onDelete: Cascade)
+
+  @@index([firmProfileId, createdAt])
+  @@map("accounting_marketplace_reviews")
 }
 
 model AccountingTask {
@@ -1902,6 +1978,7 @@ model AccountingTask {
   dueDate         DateTime?
   completedAt     DateTime?
   documentType    String?
+  recurrence      String?
   createdAt       DateTime @default(now())
 
   tenant          Tenant   @relation("AccountingTasksRelation", fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2077,4 +2154,60 @@ model FiscalCodeCatalog {
 
   @@unique([codeType, code])
   @@map("fiscal_code_catalog")
+}
+
+// -------------------------------------------------------------------
+// IMPORTACAO ASSISTIDA 4 PASSOS (Cap. 17/18)
+// -------------------------------------------------------------------
+
+model Import {
+  id            String               @id @default(uuid())
+  tenantId      String
+  supplierId    String
+  supplierName  String
+  status        String               @default("STEP_1_RECEBIDO")
+  createdById   String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier      Supplier             @relation(fields: [supplierId], references: [id])
+  createdBy     User                 @relation(fields: [createdById], references: [id])
+  items         ImportItem[]
+  statusHistory ImportStatusHistory[]
+
+  @@index([tenantId, status])
+  @@map("imports")
+}
+
+model ImportItem {
+  id              String   @id @default(uuid())
+  importId        String
+  productId       String
+  sku             String
+  name            String
+  quantity        Decimal  @db.Decimal(12, 3)
+  unitCost        Decimal  @db.Decimal(12, 4)
+  countryOfOrigin String?
+  ncm             String
+  cest            String?
+
+  import          Import   @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("import_items")
+}
+
+model ImportStatusHistory {
+  id        String   @id @default(uuid())
+  importId  String
+  tenantId  String
+  status    String
+  createdAt DateTime @default(now())
+
+  import    Import   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([importId, createdAt])
+  @@map("import_status_history")
 }

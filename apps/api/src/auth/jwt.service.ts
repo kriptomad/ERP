@@ -1,11 +1,12 @@
 import jwt from 'jsonwebtoken';
+import { UserRole } from '@prisma/client';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 export interface SessionClaims {
   userId: string;
   tenantId: string;
-  role: 'OWNER' | 'MANAGER' | 'TECHNICIAN' | 'CASHIER';
+  role: UserRole;
 }
 
 function getPrivateKey(): string {

@@ -21,6 +21,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@aws-sdk/s3-request-presigner": "^3.1149.0",
     "@prisma/client": "^6.2.1",
     "argon2": "^0.41.1",
     "bullmq": "^5.34.0",
@@ -34,6 +36,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "otplib": "^12.0.1",
+    "pg": "^8.23.1",
     "speakeasy": "^2.0.0",
     "stripe": "^17.5.0",
     "winston": "^3.17.0",
@@ -45,6 +48,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

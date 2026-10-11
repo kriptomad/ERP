@@ -130,7 +130,7 @@ personalInvestmentRouter.post('/networth/snapshot', async (req, res, next) => {
 
     const snapshot = await prisma.netWorthSnapshot.create({
       data: {
-        tenantId,
+        tenantId: tenantId!,
         totalAssets,
         totalDebts,
         netWorth: totalAssets - totalDebts,

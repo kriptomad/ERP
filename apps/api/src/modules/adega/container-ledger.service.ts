@@ -158,6 +158,7 @@ export async function suggestContainerCharges(
   daysOverdue: number;
 }>> {
   const balances = await getContainerBalance(tenantId, clientId);
+  const entries = await getEntries(tenantId, clientId);
 
   return balances
     .filter((b) => b.suggestedCharge && b.unitValue !== null)
@@ -188,4 +189,6 @@ async function getEntries(tenantId: string, clientId: string) {
   });
 }
 
-const entries = await getEntries( '', '');
+export async function listEntries(tenantId: string, clientId: string) {
+  return getEntries(tenantId, clientId);
+}

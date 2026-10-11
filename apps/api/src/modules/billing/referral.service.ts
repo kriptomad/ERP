@@ -94,15 +94,27 @@ export async function applyReferralRewardOnFirstPayment(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.subscription.update({
+    const referrerSub = await tx.subscription.findFirst({
       where: { tenantId: referral.referralCode.tenantId },
-      data: { creditBalanceMonths: { increment: REFERRER_REWARD_MONTHS } },
+      orderBy: { createdAt: 'desc' },
     });
+    if (referrerSub) {
+      await tx.subscription.update({
+        where: { id: referrerSub.id },
+        data: { creditBalanceMonths: { increment: REFERRER_REWARD_MONTHS } },
+      });
+    }
 
-    await tx.subscription.update({
+    const referredSub = await tx.subscription.findFirst({
       where: { tenantId: referredTenantId },
-      data: { firstCycleDiscountPercent: REFEREE_FIRST_CYCLE_DISCOUNT },
+      orderBy: { createdAt: 'desc' },
     });
+    if (referredSub) {
+      await tx.subscription.update({
+        where: { id: referredSub.id },
+        data: { firstCycleDiscountPercent: REFEREE_FIRST_CYCLE_DISCOUNT },
+      });
+    }
 
     await tx.referral.update({
       where: { id: referral.id },

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../infra/prisma';
+import { prisma } from '../infra/prisma';
 import { getRequestContext } from '../middlewares/request-context.middleware';
 
 export async function assertAccountingAccess(
@@ -64,7 +64,13 @@ export async function assertAccountingAccess(
     });
   }
 
-  req.accountingEngagement = engagement;
+  req.accountingEngagement = {
+    id: engagement.id,
+    firmTenantId: engagement.firmTenantId ?? '',
+    clientTenantId: engagement.clientTenantId ?? '',
+    scopes: engagement.scopes ?? [],
+    status: engagement.status,
+  };
   next();
 }
 

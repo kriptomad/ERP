@@ -31,7 +31,7 @@ export async function allocateFefoBatches(
     throw new DomainError('NOT_FOUND', 'Produto não encontrado.');
   }
 
-  if (product.stockQuantity < quantity) {
+  if (product.stockQuantity.toNumber() < quantity) {
     throw new DomainError(
       'INSUFFICIENT_STOCK',
       `Estoque insuficiente para ${product.name}. Disponível: ${product.stockQuantity}, Solicitado: ${quantity}.`,
@@ -70,7 +70,7 @@ export async function allocateFefoBatches(
       batchId: batch.id,
       quantity: take,
       expirationDate: batch.expirationDate,
-      costPrice: batch.costPrice,
+      costPrice: batch.costPrice?.toNumber() ?? null,
     });
     remaining -= take;
   }

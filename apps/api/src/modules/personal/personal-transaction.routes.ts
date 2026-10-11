@@ -61,7 +61,18 @@ personalTransactionRouter.post('/', async (req, res, next) => {
 
     const transaction = await prisma.$transaction(async (tx) => {
       const txn = await tx.personalTransaction.create({
-        data: { ...data, tenantId: tenantId!, createdBy: userId!, transactionDate: new Date(data.transactionDate) },
+        data: {
+          tenantId: tenantId!,
+          createdBy: userId!,
+          transactionDate: new Date(data.transactionDate),
+          type: data.type,
+          description: data.description,
+          amount: data.amount,
+          accountId: data.accountId,
+          isPrivate: data.isPrivate,
+          notes: data.notes,
+          categoryId: data.categoryId,
+        },
       });
 
       if (data.splits) {

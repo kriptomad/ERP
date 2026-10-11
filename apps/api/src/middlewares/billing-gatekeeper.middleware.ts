@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../infra/prisma';
+import { prisma } from '../infra/prisma';
 import { getRequestContext } from '../middlewares/request-context.middleware';
 
 export async function billingGatekeeper(req: Request, res: Response, next: NextFunction) {

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getRequestContext } from '../middlewares/request-context.middleware';
+import { prisma } from '../infra/prisma';
 
 export function tenantTypeGatekeeper(...allowedTypes: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -14,7 +15,6 @@ export function tenantTypeGatekeeper(...allowedTypes: string[]) {
       });
     }
 
-    const { prisma } = await import('../../infra/prisma');
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { tenantType: true },

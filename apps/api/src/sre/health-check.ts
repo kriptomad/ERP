@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../infra/prisma';
-import { logger } from '../../logging/structured-logger';
+import { prisma } from '../infra/prisma';
+import { logger } from '../logging/structured-logger';
 
 export const healthRouter = (): any => {
   const router = require('express').Router();
 
-  router.get('/health', async (req, res) => {
+  router.get('/health', async (req: Request, res: Response) => {
     try {
       // Verificar conexão com PostgreSQL
-      await prisma.$executeRaw('SELECT 1');
+      await prisma.$queryRawUnsafe('SELECT 1');
 
       // Verificar conexão com Redis
       const { Pool } = require('pg');
@@ -39,7 +39,7 @@ export const healthRouter = (): any => {
     }
   });
 
-  router.get('/metrics', async (req, res) => {
+  router.get('/metrics', async (req: Request, res: Response) => {
     try {
       const [tenants, users, activeSubscriptions] = await Promise.all([
         prisma.tenant.count(),

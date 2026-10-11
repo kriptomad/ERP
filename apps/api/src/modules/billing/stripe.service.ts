@@ -105,7 +105,7 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
             provider: 'stripe',
             externalEventKey,
             type: 'PAYMENT_SUCCESS',
-            payload: event.data.object,
+            payload: JSON.parse(JSON.stringify(event.data.object)),
           },
         }),
       ]);
@@ -131,7 +131,7 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
             provider: 'stripe',
             externalEventKey,
             type: 'SUBSCRIPTION_CANCELLED',
-            payload: event.data.object,
+            payload: JSON.parse(JSON.stringify(event.data.object)),
           },
         }),
       ]);
@@ -176,7 +176,7 @@ async function handleStripePaymentFailure(
         provider: 'stripe',
         externalEventKey,
         type: 'PAYMENT_FAILED',
-        payload: event.data.object,
+        payload: JSON.parse(JSON.stringify(event.data.object)),
       },
     });
   });

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../infra/prisma';
 import { getRequestContext } from './request-context.middleware';
 
@@ -34,11 +35,11 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
         resourceId,
         ip: req.ip || req.socket.remoteAddress || undefined,
         userAgent: req.headers['user-agent'],
-        changes: {
+        changes: JSON.parse(JSON.stringify({
           body: sanitizeBody(req.body),
           query: req.query,
           params: req.params,
-        },
+        })) as Prisma.InputJsonValue,
       },
     }).catch((err: Error) => {
       console.error('[Audit] Falha ao registrar log:', err.message);

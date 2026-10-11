@@ -12,6 +12,8 @@ const createClientSchema = z.object({
   creditLimit: z.number().min(0).default(0),
 });
 
+const updateClientSchema = createClientSchema.partial();
+
 export const clientRouter = Router();
 
 clientRouter.use(authenticate);
@@ -21,19 +23,21 @@ clientRouter.get('/', async (req, res, next) => {
     const { tenantId } = getRequestContext();
     const { search, page = '1', limit = '20' } = req.query;
 
-    const where: Record<string, unknown> = {
-      tenantId: tenantId!,
-      ...(search && {
-        OR: [
-          { name: { contains: search as string, mode: 'insensitive' } },
-          { document: { contains: search as string } },
-        ],
-      }),
-    };
+    const where: Record<string, unknown> = { tenantId: tenantId! };
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { document: { contains: search as string } },
+      ];
+    }
 
     const [clients, total] = await Promise.all([
       prisma.client.findMany({
         where,
+        include: {
+          loyaltyAccount: true,
+          _count: { select: { sales: true, workOrders: true } },
+        },
         skip: (parseInt(page as string) - 1) * parseInt(limit as string),
         take: parseInt(limit as string),
         orderBy: { name: 'asc' },
@@ -53,8 +57,11 @@ clientRouter.get('/:id', async (req, res, next) => {
     const client = await prisma.client.findFirst({
       where: { id: req.params.id, tenantId: tenantId! },
       include: {
+        loyaltyAccount: { include: { transactions: { orderBy: { createdAt: 'desc' }, take: 20 } } },
         sales: { orderBy: { createdAt: 'desc' }, take: 10 },
-        loyaltyAccount: true,
+        workOrders: { orderBy: { createdAt: 'desc' }, take: 10 },
+        containerLedgerEntries: { orderBy: { createdAt: 'desc' }, take: 20 },
+        accountsReceivable: { where: { status: 'PENDING' }, orderBy: { dueDate: 'asc' } },
       },
     });
     if (!client) {
@@ -85,7 +92,7 @@ clientRouter.post('/', async (req, res, next) => {
 clientRouter.put('/:id', async (req, res, next) => {
   try {
     const { tenantId } = getRequestContext();
-    const data = createClientSchema.partial().parse(req.body);
+    const data = updateClientSchema.parse(req.body);
 
     const client = await prisma.client.update({
       where: { id: req.params.id, tenantId: tenantId! },
@@ -101,10 +108,36 @@ clientRouter.put('/:id', async (req, res, next) => {
 clientRouter.delete('/:id', async (req, res, next) => {
   try {
     const { tenantId } = getRequestContext();
-    await prisma.client.delete({
-      where: { id: req.params.id, tenantId: tenantId! },
-    });
+    await prisma.client.delete({ where: { id: req.params.id, tenantId: tenantId! } });
     res.json({ success: true, data: null, error: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+clientRouter.get('/:id/credit', async (req, res, next) => {
+  try {
+    const { tenantId } = getRequestContext();
+    const client = await prisma.client.findFirst({
+      where: { id: req.params.id, tenantId: tenantId! },
+      select: { id: true, name: true, creditLimit: true, creditBalanceUsed: true },
+    });
+    if (!client) {
+      res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Cliente não encontrado.' } });
+      return;
+    }
+
+    const available = client.creditLimit.toNumber() - client.creditBalanceUsed.toNumber();
+
+    res.json({
+      success: true,
+      data: {
+        ...client,
+        availableLimit: available,
+        isBlocked: available <= 0,
+      },
+      error: null,
+    });
   } catch (err) {
     next(err);
   }

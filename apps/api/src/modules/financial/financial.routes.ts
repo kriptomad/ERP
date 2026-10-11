@@ -5,39 +5,38 @@ import { authenticate } from '../../middlewares/auth.middleware';
 import { getRequestContext } from '../../middlewares/request-context.middleware';
 
 const createPayableSchema = z.object({
+  supplierId: z.string().uuid().optional(),
   description: z.string().min(1),
   amount: z.number().positive(),
   dueDate: z.string().datetime(),
   category: z.string().optional(),
-  supplierId: z.string().uuid().optional(),
 });
 
 const createReceivableSchema = z.object({
+  clientId: z.string().uuid().optional(),
+  saleId: z.string().uuid().optional(),
   description: z.string().min(1),
   amount: z.number().positive(),
   dueDate: z.string().datetime(),
   category: z.string().optional(),
-  clientId: z.string().uuid().optional(),
 });
 
 export const financialRouter = Router();
 
 financialRouter.use(authenticate);
 
-// Accounts Payable
 financialRouter.get('/payables', async (req, res, next) => {
   try {
     const { tenantId } = getRequestContext();
     const { status, page = '1', limit = '20' } = req.query;
 
-    const where: Record<string, unknown> = {
-      tenantId: tenantId!,
-      ...(status && { status: status as string }),
-    };
+    const where: Record<string, unknown> = { tenantId: tenantId! };
+    if (status) where.status = status;
 
     const [items, total] = await Promise.all([
       prisma.accountPayable.findMany({
         where,
+        include: { supplier: { select: { id: true, name: true } } },
         skip: (parseInt(page as string) - 1) * parseInt(limit as string),
         take: parseInt(limit as string),
         orderBy: { dueDate: 'asc' },
@@ -57,14 +56,7 @@ financialRouter.post('/payables', async (req, res, next) => {
     const data = createPayableSchema.parse(req.body);
 
     const item = await prisma.accountPayable.create({
-      data: {
-        tenantId: tenantId!,
-        description: data.description,
-        amount: data.amount,
-        dueDate: new Date(data.dueDate),
-        category: data.category,
-        supplierId: data.supplierId,
-      },
+      data: { ...data, tenantId: tenantId!, dueDate: new Date(data.dueDate) },
     });
 
     res.status(201).json({ success: true, data: item, error: null });
@@ -89,20 +81,18 @@ financialRouter.post('/payables/:id/pay', async (req, res, next) => {
   }
 });
 
-// Accounts Receivable
 financialRouter.get('/receivables', async (req, res, next) => {
   try {
     const { tenantId } = getRequestContext();
     const { status, page = '1', limit = '20' } = req.query;
 
-    const where: Record<string, unknown> = {
-      tenantId: tenantId!,
-      ...(status && { status: status as string }),
-    };
+    const where: Record<string, unknown> = { tenantId: tenantId! };
+    if (status) where.status = status;
 
     const [items, total] = await Promise.all([
       prisma.accountReceivable.findMany({
         where,
+        include: { client: { select: { id: true, name: true } } },
         skip: (parseInt(page as string) - 1) * parseInt(limit as string),
         take: parseInt(limit as string),
         orderBy: { dueDate: 'asc' },
@@ -122,14 +112,7 @@ financialRouter.post('/receivables', async (req, res, next) => {
     const data = createReceivableSchema.parse(req.body);
 
     const item = await prisma.accountReceivable.create({
-      data: {
-        tenantId: tenantId!,
-        description: data.description,
-        amount: data.amount,
-        dueDate: new Date(data.dueDate),
-        category: data.category,
-        clientId: data.clientId,
-      },
+      data: { ...data, tenantId: tenantId!, dueDate: new Date(data.dueDate) },
     });
 
     res.status(201).json({ success: true, data: item, error: null });
@@ -154,8 +137,7 @@ financialRouter.post('/receivables/:id/receive', async (req, res, next) => {
   }
 });
 
-// Cash Flow Summary
-financialRouter.get('/cash-flow/summary', async (req, res, next) => {
+financialRouter.get('/cash-flow', async (req, res, next) => {
   try {
     const { tenantId } = getRequestContext();
     const { startDate, endDate } = req.query;
@@ -183,10 +165,10 @@ financialRouter.get('/cash-flow/summary', async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        totalPayables: payables._sum.amount || 0,
-        totalReceivables: receivables._sum.amount || 0,
-        totalSales: sales._sum.totalAmount || 0,
-        netCashFlow: (receivables._sum.amount || 0) - (payables._sum.amount || 0),
+        totalPayables: payables._sum.amount?.toNumber() ?? 0,
+        totalReceivables: receivables._sum.amount?.toNumber() ?? 0,
+        totalSales: sales._sum.totalAmount?.toNumber() ?? 0,
+        netCashFlow: (receivables._sum.amount?.toNumber() ?? 0) - (payables._sum.amount?.toNumber() ?? 0),
       },
       error: null,
     });

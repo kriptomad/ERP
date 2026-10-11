@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../infra/prisma';
-import { authenticate, requireRole } from '../../middlewares/auth.middleware';
-import { getRequestContext } from '../../middlewares/request-context.middleware';
-import { DomainError } from '../../middlewares/error-handler.middleware';
+import { authenticate } from '../../middlewares/auth.middleware';
+import { requireModule } from '../../middlewares/module-gating.middleware';
+import { logger } from '../../logging/structured-logger';
 
 const createSaleSchema = z.object({
   clientId: z.string().uuid().optional(),
@@ -17,80 +17,40 @@ const createSaleSchema = z.object({
   discountAmount: z.number().min(0).default(0),
   taxAmount: z.number().min(0).default(0),
   notes: z.string().optional(),
+  loyaltyPointsRedeemed: z.number().min(0).default(0),
 });
 
 export const saleRouter = Router();
 
 saleRouter.use(authenticate);
 
-saleRouter.get('/', async (req, res, next) => {
-  try {
-    const { tenantId } = getRequestContext();
-    const { status, page = '1', limit = '20' } = req.query;
-
-    const where: Record<string, unknown> = {
-      tenantId: tenantId!,
-      ...(status && { status: status as string }),
-    };
-
-    const [sales, total] = await Promise.all([
-      prisma.sale.findMany({
-        where,
-        include: { items: true, client: true },
-        skip: (parseInt(page as string) - 1) * parseInt(limit as string),
-        take: parseInt(limit as string),
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.sale.count({ where }),
-    ]);
-
-    res.json({
-      success: true,
-      data: { items: sales, total, page: parseInt(page as string), limit: parseInt(limit as string) },
-      error: null,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-saleRouter.get('/:id', async (req, res, next) => {
-  try {
-    const { tenantId } = getRequestContext();
-    const sale = await prisma.sale.findFirst({
-      where: { id: req.params.id, tenantId: tenantId! },
-      include: { items: true, client: true },
-    });
-    if (!sale) {
-      res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Venda não encontrada.' } });
-      return;
-    }
-    res.json({ success: true, data: sale, error: null });
-  } catch (err) {
-    next(err);
-  }
-});
-
 saleRouter.post('/', async (req, res, next) => {
   try {
-    const { tenantId, userId } = getRequestContext();
+    const context = getRequestContext();
+    const tenantId = context.tenantId!;
+    const userId = context.userId!;
     const data = createSaleSchema.parse(req.body);
 
-    const sale = await prisma.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+    const sale = await prisma.$transaction(async (tx) => {
       let totalAmount = 0;
       const saleItems = [];
 
       for (const item of data.items) {
         const product = await tx.product.findFirst({
-          where: { id: item.productId, tenantId: tenantId! },
+          where: { id: item.productId, tenantId },
         });
 
         if (!product) {
-          throw new DomainError('NOT_FOUND', `Produto ${item.productId} não encontrado.`);
+          throw new Error(`Produto ${item.productId} não encontrado.`);
         }
 
-        if (product.stockQuantity < item.quantity) {
-          throw new DomainError('INSUFFICIENT_STOCK', `Estoque insuficiente para ${product.name}.`);
+        if (product.trackingType === 'BATCH') {
+          const allocations = await allocateFefoBatches(tenantId, item.productId, item.quantity);
+          if (allocations.reduce((sum, a) => sum + a.quantity, 0) < item.quantity) {
+            throw new Error(`Estoque insuficiente para ${product.name} (FEFO).`);
+          }
+        } else if (product.stockQuantity.toNumber() < item.quantity) {
+          throw new Error(`Estoque insuficiente para ${product.name}.`);
         }
 
         const itemTotal = item.unitPrice * item.quantity - item.discount;
@@ -105,30 +65,20 @@ saleRouter.post('/', async (req, res, next) => {
           totalPrice: itemTotal,
           costPrice: product.costPrice,
         });
-
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stockQuantity: { decrement: item.quantity } },
-        });
-
-        await tx.stockMovement.create({
-          data: {
-            tenantId: tenantId!,
-            productId: item.productId,
-            type: 'SALE',
-            quantity: item.quantity,
-            referenceType: 'SALE',
-            reason: 'Venda PDV',
-          },
-        });
       }
 
       totalAmount -= data.discountAmount;
 
-      return tx.sale.create({
+      let loyaltyDiscount = 0;
+      if (data.loyaltyPointsRedeemed > 0 && data.clientId) {
+        loyaltyDiscount = await redeemLoyaltyPointsInTx(tx, tenantId, data.clientId, data.loyaltyPointsRedeemed, '');
+      }
+      totalAmount -= loyaltyDiscount;
+
+      const saleRecord = await tx.sale.create({
         data: {
-          tenantId: tenantId!,
-          userId: userId!,
+          tenantId,
+          userId,
           clientId: data.clientId,
           status: 'COMPLETED',
           paymentMethod: data.paymentMethod,
@@ -136,11 +86,24 @@ saleRouter.post('/', async (req, res, next) => {
           discountAmount: data.discountAmount,
           taxAmount: data.taxAmount,
           notes: data.notes,
+          channel: 'POS',
           items: { create: saleItems },
         },
         include: { items: true },
       });
+
+      if (data.clientId) {
+        await accrueLoyaltyPointsInTx(tx, tenantId, data.clientId, totalAmount, saleRecord.id);
+      }
+
+      if (data.paymentMethod === 'STORE_CREDIT' && data.clientId) {
+        await debitCredit(tenantId, data.clientId, totalAmount, saleRecord.id);
+      }
+
+      return saleRecord;
     });
+
+    logger.info('Sale completed', { saleId: sale.id, tenantId, userId, totalAmount: sale.totalAmount });
 
     res.status(201).json({ success: true, data: sale, error: null });
   } catch (err) {
@@ -148,39 +111,34 @@ saleRouter.post('/', async (req, res, next) => {
   }
 });
 
-const refundSaleSchema = z.object({
-  reason: z.string().min(1),
-});
-
-saleRouter.post('/:id/refund', requireRole('OWNER', 'MANAGER'), async (req, res, next) => {
+saleRouter.post('/:id/refund', async (req, res, next) => {
   try {
-    const { tenantId, userId } = getRequestContext();
-    const { reason } = refundSaleSchema.parse(req.body);
+    const context = getRequestContext();
+    const tenantId = context.tenantId!;
+    const userId = context.userId!;
 
-    const sale = await prisma.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+    const { reason } = z.object({ reason: z.string().min(1) }).parse(req.body);
+
+    const sale = await prisma.$transaction(async (tx) => {
       const existing = await tx.sale.findFirst({
-        where: { id: req.params.id, tenantId: tenantId! },
+        where: { id: req.params.id, tenantId },
+        include: { items: true },
       });
 
-      if (!existing) {
-        throw new DomainError('NOT_FOUND', 'Venda não encontrada.');
-      }
-
-      if (existing.status === 'REFUNDED') {
-        throw new DomainError('CONFLICT', 'Venda já foi estornada.');
-      }
+      if (!existing) throw new Error('Venda não encontrada.');
+      if (existing.status === 'REFUNDED') throw new Error('Venda já estornada.');
 
       const updated = await tx.sale.update({
         where: { id: req.params.id },
         data: {
           status: 'REFUNDED',
           refundReason: reason,
-          refundRequestedBy: userId!,
+          refundRequestedBy: userId,
           refundedAt: new Date(),
         },
       });
 
-      for (const item of await tx.saleItem.findMany({ where: { saleId: req.params.id } })) {
+      for (const item of existing.items) {
         await tx.product.update({
           where: { id: item.productId },
           data: { stockQuantity: { increment: item.quantity } },
@@ -188,11 +146,10 @@ saleRouter.post('/:id/refund', requireRole('OWNER', 'MANAGER'), async (req, res,
 
         await tx.stockMovement.create({
           data: {
-            tenantId: tenantId!,
+            tenantId,
             productId: item.productId,
             type: 'RETURN',
             quantity: item.quantity,
-            referenceType: 'SALE_REFUND',
             reason: `Estorno venda ${req.params.id}`,
           },
         });
@@ -206,3 +163,8 @@ saleRouter.post('/:id/refund', requireRole('OWNER', 'MANAGER'), async (req, res,
     next(err);
   }
 });
+
+import { getRequestContext } from '../../middlewares/request-context.middleware';
+import { allocateFefoBatches } from '../stock/fefo.service';
+import { accrueLoyaltyPointsInTx, redeemLoyaltyPointsInTx } from '../loyalty/loyalty.service';
+import { debitCredit } from '../credit/credit.service';

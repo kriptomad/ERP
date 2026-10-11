@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../infra/prisma';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/auth.middleware';
@@ -33,7 +34,9 @@ officialDocumentLayoutRouter.post('/', async (req, res, next) => {
     const data = createSchema.parse(req.body);
     const layout = await prisma.officialDocumentLayoutVersion.create({
       data: {
-        ...data,
+        version: data.version,
+        documentType: data.documentType,
+        layoutJson: data.layoutJson as Prisma.InputJsonValue,
         effectiveFrom: new Date(data.effectiveFrom),
         effectiveTo: data.effectiveTo ? new Date(data.effectiveTo) : null,
       },

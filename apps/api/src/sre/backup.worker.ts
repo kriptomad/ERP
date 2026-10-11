@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { logger } from '../../logging/structured-logger';
+import { logger } from '../logging/structured-logger';
 import { scheduleBackup } from './backup.service';
 
 const backupQueue = 'backup-dr';

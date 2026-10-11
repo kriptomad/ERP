@@ -71,6 +71,7 @@ export async function handleAsaasWebhook(event: string, payload: any): Promise<v
       await prisma.tenant.upsert({
         where: { externalCustomerId: customerId },
         create: {
+          slug: `asaas-${customerId}`,
           externalCustomerId: customerId,
           legalName: name || 'Sem nome',
           tradeName: name || 'Sem nome',
@@ -79,9 +80,9 @@ export async function handleAsaasWebhook(event: string, payload: any): Promise<v
           status: 'ACTIVE',
         },
         update: {
-          legalName: name || legalName,
-          tradeName: name || tradeName,
-          cnpj: cnpjCnpj,
+          legalName: name || undefined,
+          tradeName: name || undefined,
+          cnpj: cpfCnpj,
         },
       });
       break;
@@ -102,7 +103,7 @@ export async function handleAsaasWebhook(event: string, payload: any): Promise<v
           category: 'ASSINATURA',
         },
         update: {
-          description: title || description,
+          description: title || undefined,
           amount: value,
           dueDate: new Date(dueDate),
           status: status === 'OPEN' ? 'PENDING' : status,

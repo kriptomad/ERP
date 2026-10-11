@@ -114,7 +114,7 @@ export async function validatePrescriptionForSale(
     id: string;
     type: string;
     prescriptionNumber?: string;
-    pharmacistName: string;
+    pharmacistName?: string;
   };
 }> {
   const product = await prisma.product.findFirst({
@@ -139,7 +139,7 @@ export async function validatePrescriptionForSale(
       id: prescription.id,
       type: prescription.type,
       prescriptionNumber: prescription.prescriptionNumber ?? undefined,
-      pharmacistName: prescription.pharmacistName,
+      pharmacistName: prescription.pharmacistName ?? undefined,
     },
   };
 }

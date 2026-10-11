@@ -92,7 +92,7 @@ export async function handlePluggyWebhook(payload: any): Promise<void> {
         fromDate.setMonth(fromDate.getMonth() - 1); // Últimos 30 dias
 
         try {
-          const transactions = await fetchTransactions(account.pluggyAccountId, fromDate, new Date());
+          const transactions = await fetchTransactions(account.pluggyAccountId ?? account.pluggyItemId ?? '', fromDate, new Date());
 
           for (const tx of transactions) {
             // Verificar se já existe
@@ -113,6 +113,7 @@ export async function handlePluggyWebhook(payload: any): Promise<void> {
                   tenantId: account.tenantId,
                   accountId: account.id,
                   categoryId: account.defaultCategoryId,
+                  createdBy: account.ownerId,
                   type,
                   amount: Math.abs(tx.amount),
                   description: tx.description || 'Transação importada',

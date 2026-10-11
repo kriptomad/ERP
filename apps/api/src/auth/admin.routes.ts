@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { TenantStatus } from '@prisma/client';
 import { prisma } from '../infra/prisma';
 import { authenticate, requireRole } from '../middlewares/auth.middleware';
 
@@ -41,7 +42,7 @@ adminRouter.get('/tenants', async (req, res, next) => {
   try {
     const { status, page = '1', limit = '20' } = req.query;
 
-    const where = status ? { status: status as string } : {};
+    const where = status ? { status: status as TenantStatus } : {};
 
     const [tenants, total] = await Promise.all([
       prisma.tenant.findMany({
