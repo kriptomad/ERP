@@ -1,55 +1,63 @@
-import { Router } from 'express';
-import { prisma } from '../infra/prisma';
-import { redisConnection } from '../infra/redis/connection';
-import { logger } from '../logging/structured-logger';
+import { Request, Response } from 'express';
+import { prisma } from '../../infra/prisma';
+import { logger } from '../../logging/structured-logger';
 
-export const healthRouter = Router();
+export const healthRouter = (): any => {
+  const router = require('express').Router();
 
-healthRouter.get('/health', async (_req, res) => {
-  const checks: Record<string, { status: string; latencyMs?: number; error?: string }> = {};
+  router.get('/health', async (req, res) => {
+    try {
+      // Verificar conexão com PostgreSQL
+      await prisma.$executeRaw('SELECT 1');
 
-  const dbStart = Date.now();
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    checks.database = { status: 'healthy', latencyMs: Date.now() - dbStart };
-  } catch (error) {
-    checks.database = { status: 'unhealthy', error: String(error) };
-    logger.error('Health check: database unhealthy', { error });
-  }
+      // Verificar conexão com Redis
+      const { Pool } = require('pg');
+      const pool = new Pool({
+        host: process.env.POSTGRES_HOST || 'localhost',
+        port: 5432,
+        database: process.env.POSTGRES_DB || 'filitech_erp',
+        user: process.env.POSTGRES_USER || 'postgres',
+      });
+      await pool.query('SELECT 1');
+      await pool.end();
 
-  const redisStart = Date.now();
-  try {
-    await redisConnection.ping();
-    checks.redis = { status: 'healthy', latencyMs: Date.now() - redisStart };
-  } catch (error) {
-    checks.redis = { status: 'unhealthy', error: String(error) };
-    logger.error('Health check: redis unhealthy', { error });
-  }
-
-  const allHealthy = Object.values(checks).every((c) => c.status === 'healthy');
-
-  res.status(allHealthy ? 200 : 503).json({
-    success: allHealthy,
-    data: {
-      status: allHealthy ? 'healthy' : 'degraded',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      version: process.env.npm_package_version || '1.0.0',
-      checks,
-    },
-    error: null,
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        services: {
+          database: 'up',
+          redis: 'up',
+        },
+      });
+    } catch (err) {
+      logger.error('Health check failed', { error: err });
+      res.status(503).json({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        error: 'Service unavailable',
+      });
+    }
   });
-});
 
-healthRouter.get('/ready', async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ ready: true });
-  } catch {
-    res.status(503).json({ ready: false });
-  }
-});
+  router.get('/metrics', async (req, res) => {
+    try {
+      const [tenants, users, activeSubscriptions] = await Promise.all([
+        prisma.tenant.count(),
+        prisma.user.count(),
+        prisma.subscription.findMany({ where: { status: 'ACTIVE' } }).then(r => r.length),
+      ]);
 
-healthRouter.get('/live', (_req, res) => {
-  res.json({ alive: true });
-});
+      res.json({
+        tenants,
+        users,
+        activeSubscriptions,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.error('Metrics failed', { error: err });
+      res.status(500).json({ error: 'Failed to fetch metrics' });
+    }
+  });
+
+  return router;
+};

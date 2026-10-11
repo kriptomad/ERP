@@ -1,111 +1,43 @@
-import { Router } from 'express';
-import { z } from 'zod';
 import { prisma } from '../../infra/prisma';
-import { billingQueue } from './queue';
-import { handlePaymentFailure, handlePaymentRecovered, processCancelAtPeriodEnd } from './billing.service';
-import { authenticate } from '../../middlewares/auth.middleware';
+import { logger } from '../../logging/structured-logger';
 
-export const billingJobRouter = Router();
+export async function processDunningCycle(): Promise<void> {
+  const pastDueTenants = await prisma.tenant.findMany({
+    where: { status: 'PAST_DUE' },
+  });
 
-billingJobRouter.use(authenticate);
+  const now = new Date();
 
-billingJobRouter.post('/jobs/dunning/process', async (req, res, next) => {
-  try {
-    const overdueSubscriptions = await prisma.subscription.findMany({
-      where: {
-        status: 'PAST_DUE',
-        nextRetryAt: { lte: new Date() },
-      },
-    });
+  for (const tenant of pastDueTenants) {
+    const graceEndsAt = tenant.gracePeriodEndsAt;
+    if (!graceEndsAt) continue;
 
-    const results = [];
-    for (const sub of overdueSubscriptions) {
-      const result = await handlePaymentFailure(sub.tenantId, sub.id);
-      results.push({ subscriptionId: sub.id, ...result });
-    }
+    if (now > graceEndsAt) {
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { status: 'SUSPENDED' },
+      });
+      logger.warn('Tenant suspenso por fim de graça', { tenantId: tenant.id });
+    } else {
+      // Enviar lembrete de pagamento via WhatsApp
+      const daysOverdue = Math.ceil((now.getTime() - graceEndsAt.getTime()) / (1000 * 60 * 60 * 24)) * -1;
+      const clients = await prisma.client.findMany({ where: { tenantId: tenant.id } });
 
-    res.json({ success: true, data: { processed: results.length, results }, error: null });
-  } catch (err) {
-    next(err);
-  }
-});
-
-billingJobRouter.post('/jobs/cancellation/process', async (req, res, next) => {
-  try {
-    const cancelPending = await prisma.subscription.findMany({
-      where: {
-        cancelAtPeriodEnd: true,
-        status: 'ACTIVE',
-        currentPeriodEnd: { lte: new Date() },
-      },
-    });
-
-    const results = [];
-    for (const sub of cancelPending) {
-      await processCancelAtPeriodEnd(sub.tenantId, sub.id);
-      results.push({ subscriptionId: sub.id, status: 'CANCELLED' });
-    }
-
-    res.json({ success: true, data: { processed: results.length, results }, error: null });
-  } catch (err) {
-    next(err);
-  }
-});
-
-billingJobRouter.post('/jobs/charge/process', async (req, res, next) => {
-  try {
-    const activeSubscriptions = await prisma.subscription.findMany({
-      where: {
-        status: 'ACTIVE',
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: { gte: new Date() },
-      },
-      include: { plan: true },
-    });
-
-    const results = [];
-    for (const sub of activeSubscriptions) {
-      if (sub.creditBalanceMonths > 0) {
-        await prisma.subscription.update({
-          where: { id: sub.id },
-          data: { creditBalanceMonths: { decrement: 1 } },
+      for (const client of clients) {
+        const receivables = await prisma.accountReceivable.findMany({
+          where: { tenantId: tenant.id, clientId: client.id, status: 'PENDING' },
         });
-        results.push({ subscriptionId: sub.id, action: 'CREDIT_APPLIED' });
-      } else {
-        await billingQueue.add('charge-recurring', {
-          type: 'charge-recurring',
-          tenantId: sub.tenantId,
-          subscriptionId: sub.id,
-          externalSubscriptionId: sub.externalSubscriptionId,
-        });
-        results.push({ subscriptionId: sub.id, action: 'CHARGE_QUEUED' });
+
+        for (const receivable of receivables) {
+          await sendPaymentReminder(tenant.id, client.phone || '', receivable.amount.toNumber(), receivable.dueDate.toISOString());
+        }
       }
     }
-
-    res.json({ success: true, data: { processed: results.length, results }, error: null });
-  } catch (err) {
-    next(err);
   }
-});
+}
 
-billingJobRouter.get('/jobs/status', async (_req, res, next) => {
-  try {
-    const [activeJobs, completedJobs, failedJobs] = await Promise.all([
-      billingQueue.getActive(),
-      billingQueue.getCompleted(),
-      billingQueue.getFailed(),
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        active: activeJobs.length,
-        completed: completedJobs.length,
-        failed: failedJobs.length,
-      },
-      error: null,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+function sendPaymentReminder(_tenantId: string, _phone: string, _amount: number, _dueDate: string): Promise<void> {
+  // Implementar envio real via WhatsApp
+  logger.info('Payment reminder would be sent', { amount: _amount, dueDate: _dueDate });
+  return Promise.resolve();
+}
